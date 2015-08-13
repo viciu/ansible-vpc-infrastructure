@@ -140,7 +140,7 @@ vpc_instances:
 # nas - https://aws.amazon.com/marketplace/pp/B00IA43LHM/ref=srh_res_product_title?ie=UTF8&sr=0-2&qid=1438358178828
 #
   - instance_type: t2.medium
-    group: netmoms_vpc
+    group: default_vpc
     keypair:
     image: ami-2eddc646
     instance_tags: 
