@@ -1,0 +1,36 @@
+---
+- name: Create VGs
+  lvg:
+    vg: "{{ item.vg }}"
+    pvs: "{{ item.pvs }}"
+    pesize: 4
+  with_items: vg_list
+
+- name: Create LVs
+  lvol:
+    vg: "{{ item.vg }}"
+    lv: "{{ item.lv }}"
+    size: "{{ item.size }}"
+    state: present
+  with_items: lv_list
+
+- name: Make filesystem for LVs
+  filesystem:
+    fstype: "{{ item.fstype }}"
+    dev: "/dev/{{ item.vg }}/{{ item.lv }}"
+  with_items: lv_list
+
+- name: Create folder for LVs
+  file:
+    path: "{{ item.mount }}"
+    state: directory
+  with_items: lv_list
+
+- name: Mount LVs
+  mount:
+    name: "{{ item.mount }}"
+    src: "/dev/{{ item.vg }}/{{ item.lv }}"
+    opts: defaults
+    fstype: "{{ item.fstype }}"
+    state: mounted
+  with_items: lv_list

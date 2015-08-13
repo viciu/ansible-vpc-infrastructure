@@ -1,0 +1,16 @@
+---
+- name: Create folder for NFS storage
+  file:
+    path: "{{ item.name }}"
+    mode: 0755
+    state: directory
+  with_items: nfs_list
+
+- name: Mount NFS storage
+  mount:
+    name: "{{ item.name }}"
+    src: "{{ hostvars[groups['tag_Name_nas'][0]]['ec2_private_ip_address'] }}:{{ item.share_name }}"
+    opts: auto,vers=3,_netdev
+    fstype: "{{ item.fstype }}"
+    state: mounted
+  with_items: nfs_list

@@ -1,0 +1,5 @@
+---
+- hosts: all:!tag_Name_vpn:!tag_Name_nat:!tag_Name_nas
+  sudo: True
+  roles:
+    - storage

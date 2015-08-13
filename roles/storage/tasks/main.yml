@@ -1,0 +1,8 @@
+--- 
+- include: apt.yml tags=storage
+- include: raid.yml tags=storage
+  when: raid_devices is defined
+- include: lvm.yml tags=storage
+  when: vg_list and lv_list is defined
+- include: nfs.yml tags=storage
+  when: nfs_list is defined

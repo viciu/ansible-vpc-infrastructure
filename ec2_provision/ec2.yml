@@ -1,0 +1,165 @@
+ec2_access_key: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+ec2_secret_key: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+ec2_region: us-east-1
+ec2_zone: us-east-1c
+ec2_image: ami-827f00ea
+ec2_instance_type: t1.micro
+ec2_keypair: "change_me"
+ec2_security_group: default
+ec2_instance_count: 1
+
+
+ec2_nat_instance_type: t1.micro
+ec2_nat_image: ami-c02b04a8
+
+vpc_name: default_vpc
+vpc_cidr_block: 10.0.0.0/16
+vpc_subnets:
+    - cidr: 10.0.1.0/24
+      az: us-east-1c
+      resource_tags: {"Name":"public_subnet"}
+    - cidr: 10.0.2.0/24
+      az: us-east-1c
+      resource_tags: {"Name":"private_subnet"}
+vpc_internet_gateway: "yes"
+vpc_private_subnet: 10.0.2.0/24
+vpc_public_subnet: 10.0.1.0/24
+vpc_nat_instance_id: ami-4f9fee26 
+vpc_nat_instance_type: t1.micro
+
+sg_list:
+  - name: sg_nat
+    description: "SG for NAT"
+    rules:
+      - proto: all
+        cidr_ip: 10.0.0.0/16
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        cidr_ip: 0.0.0.0/0
+    rules_egress:
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+  - name: sg_internal
+    description: "SG for internal traffic"
+    rules:
+      - proto: all
+        cidr_ip: 10.0.0.0/16
+    rules_egress:
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+  - name: sg_jumphost
+    description: "SG for jumphost"
+    rules:
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        cidr_ip: 0.0.0.0/0 
+      - proto: icmp
+        from_port: -1
+        to_port: -1
+        cidr_ip: 0.0.0.0/0 
+    rules_egress:
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+  - name: sg_vpn
+    description: "SG for VPN"
+    rules:
+      - proto: tcp
+        from_port: 943
+        to_port: 943
+        cidr_ip: 0.0.0.0/0
+      - proto: tcp
+        from_port: 443
+        to_port: 443
+        cidr_ip: 0.0.0.0/0
+      - proto: udp
+        from_port: 1194
+        to_port: 1194
+        cidr_ip: 0.0.0.0/0
+    rules_egress:
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+  - name: sg_nas
+    description: "SG for NAS"
+    rules:
+      - proto: tcp
+        from_port: 443
+        to_port: 443
+        cidr_ip: 0.0.0.0/0
+    rules_egress:
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+
+vpc_instances:
+#
+# jumphost
+#
+  - instance_type: t2.medium
+    group: default_vpc
+    keypair:
+    image: 
+    instance_tags: 
+        Name: jumphost
+    exact_count: 1
+    count_tags: {"Name":"jumphost"}
+    subnet: "{{ public_subnet }}"
+    public_ip: yes
+    group: 
+      - sg_internal
+      - sg_jumphost
+    volumes:
+      - device_name: /dev/sdb
+        device_type: io1
+        iops: 200
+        volume_size: 0
+        delete_on_termination: true
+#
+# vpn - https://aws.amazon.com/marketplace/pp/B00MI40CAE/ref=srh_res_product_title?ie=UTF8&sr=0-3&qid=1438269806922
+#
+  - instance_type: t2.micro
+    group: default_vpc
+    keypair:
+    image: ami-b62d20de
+    instance_tags: 
+        Name: vpn
+    exact_count: 1
+    count_tags: {"Name":"vpn"}
+    subnet: "{{ public_subnet }}"
+    public_ip: yes
+    group: 
+      - sg_internal
+      - sg_vpn
+    volumes:
+      - device_name: /dev/sdb
+        device_type: io1
+        iops: 200
+        volume_size: 0
+        delete_on_termination: true
+#
+# nas - https://aws.amazon.com/marketplace/pp/B00IA43LHM/ref=srh_res_product_title?ie=UTF8&sr=0-2&qid=1438358178828
+#
+  - instance_type: t2.medium
+    group: netmoms_vpc
+    keypair:
+    image: ami-2eddc646
+    instance_tags: 
+        Name: nas
+    exact_count: 1
+    count_tags: {"Name":"nas"}
+    subnet: "{{ private_subnet }}"
+    public_ip: no
+    group: 
+      - sg_internal
+      - sg_nas
+    volumes:
+      - device_name: /dev/sdb
+        device_type: io1
+        iops: 1000
+        volume_size: 1000
+        delete_on_termination: false
+      - device_name: /dev/sdc
+        device_type: io1
+        iops: 1000
+        volume_size: 1000
+        delete_on_termination: false

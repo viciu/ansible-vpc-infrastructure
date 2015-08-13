@@ -1,0 +1,25 @@
+--- 
+- name: Check raid devices
+  shell: "mdadm -D {{ item.name }}"
+  ignore_errors: yes
+  register: mdadm_check
+  changed_when: "mdadm_check.rc !=0"
+  with_items: raid_devices
+
+- name: Initialise raid device
+  shell: mdadm -v --create --metadata=0.90 {{ item.0.name }} --level={{ item.0.level }} --raid-devices={{ item.0.devices | length }} {{ item.0.devices | join (" ") }}
+  with_together:
+    - raid_devices
+    - mdadm_check.results
+  when: item.1.rc !=0
+
+- name: Scan raid devices
+  shell: "mdadm --detail --scan"
+  ignore_errors: yes
+  changed_when: "mdadm_scan.rc !=0"
+  register: mdadm_scan
+
+- name: Create mdadm.conf
+  template:
+    src: mdadm.conf.j2
+    dest: /etc/mdadm/mdadm.conf

@@ -1,0 +1,122 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  vars_files:
+  - ec2_provision/ec2.yml
+  tasks:
+
+  - name: Check if we already have VPC
+    local_action:
+      module: stat
+      path: vpc_info.yml
+    register: vpc_created
+
+  - name: Create VPC
+    local_action:
+      module: ec2_vpc
+      state: present
+      region: "{{ ec2_region }}"
+      cidr_block: "{{ vpc_cidr_block }}"
+      subnets: "{{ vpc_subnets }}"
+      internet_gateway: "{{ vpc_internet_gateway|string }}"
+      route_tables:
+        - subnets:
+            - "{{ vpc_public_subnet }}"
+          routes:
+            - dest: 0.0.0.0/0
+              gw: igw
+      wait: true
+      resource_tags: {"Name":"{{ vpc_name }}"}
+    register: vpc
+    when: vpc_created.stat.exists == False
+
+  - name: Write VPC ID to vars file
+    local_action: shell echo "vpc_id"":" "{{ vpc.vpc_id }}" > "vpc_info.yml"
+    when: vpc.changed
+
+  - name: Write subnets ID to vars file
+    local_action: shell echo "{{ item.resource_tags.Name }}"":" "{{ item.id }}" >> "vpc_info.yml"
+    when: vpc.changed
+    with_items: vpc.subnets
+
+  - name: Load vars file
+    include_vars: "vpc_info.yml"
+
+  - name: Create security groups
+    ec2_group:
+      description: "{{ item.description }}"
+      name: "{{ item.name }}"
+      region: "{{ ec2_region }}"
+      rules: "{{ item.rules }}"
+      rules_egress: "{{ item.rules_egress }}"
+      state: present
+      vpc_id: "{{ vpc_id }}"
+    with_items: sg_list
+
+  - name: Create NAT instance
+    ec2:
+      region: "{{ ec2_region }}"
+      keypair: "{{ ec2_keypair }}"
+      instance_type: "{{ ec2_nat_instance_type }}"
+      image: "{{ ec2_nat_image }}"
+      vpc_subnet_id: "{{ public_subnet }}"
+      wait: true
+      instance_tags:
+        Name: "nat"
+      exact_count: 1
+      count_tag:
+        Name: "nat"
+      source_dest_check: no
+      assign_public_ip: yes
+      group: sg_nat
+    register: ec2_nat
+
+  - name: Write NAT instance ID to vars file
+    local_action: shell echo "nat_instance_id"":" "{{ item.id }}" >> "vpc_info.yml"
+    when: vpc.changed
+    with_items: ec2_nat.instances
+
+  - name: Load vars file
+    include_vars: "vpc_info.yml"
+
+  - name: Update VPC route
+    local_action:
+      module: ec2_vpc
+      state: present
+      region: "{{ ec2_region }}"
+      cidr_block: "{{ vpc_cidr_block }}"
+      subnets: "{{ vpc_subnets }}"
+      internet_gateway: "{{ vpc_internet_gateway|string }}"
+      route_tables:
+        - subnets:
+            - "{{ vpc_private_subnet }}"
+          routes:
+            - dest: 0.0.0.0/0
+              gw: "{{ nat_instance_id }}"
+        - subnets:
+           - "{{ vpc_public_subnet }}"
+          routes:
+           - dest: 0.0.0.0/0
+             gw: igw
+      wait: true
+      resource_tags: {"Name":"{{ vpc_name }}"}
+    register: vpc
+    when: vpc_created.stat.exists == False
+
+  - name: Create instances
+    ec2:
+      region: "{{ ec2_region }}"
+      keypair: "{{ item.keypair | default(ec2_keypair, true) }}"
+      instance_type: "{{ item.instance_type | default(ec2_instance_type, true) }}"
+      image: "{{ item.image | default(ec2_image, true) }}"
+      vpc_subnet_id: "{{ item.subnet }}"
+      wait: yes
+      instance_tags: "{{ item.instance_tags }}"
+      exact_count: "{{ item.exact_count }}"
+      count_tag: "{{ item.count_tags }}"
+      assign_public_ip: "{{ item.public_ip | default('no') }}"
+      group: "{{ item.group }}"
+      volumes: "{{ item.volumes }}"
+    register: ec2
+    with_items: vpc_instances

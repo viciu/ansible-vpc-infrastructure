@@ -1,0 +1,22 @@
+#raid_devices:
+#  - name: /dev/md0
+#    level: 1
+#    devices:
+#      - /dev/xvdb
+#      - /dev/xvdc
+
+#vg_list:
+#  - vg: vg1
+#    pvs:
+#      - /dev/md0
+#lv_list:
+#  - lv: data1
+#    vg: vg1
+#    size: 100g
+#    fstype: ext4
+#    mount: /mnt/storage
+
+#nfs_list:
+#  - name: /mnt/storage
+#    share_name: /sg1/vol1
+#    fstype: nfs
